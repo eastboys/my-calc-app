@@ -1,0 +1,412 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>商品合計計算ツール</title>
+    <!-- PWA / App 設定 -->
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="theme-color" content="#2563eb">
+    <meta name="description" content="自分専用のお買い物・商品合計計算ツール">
+    
+    <!-- アプリアイコン（インラインSVGデータURI） -->
+    <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect width='100' height='100' rx='20' fill='%232563eb'/><text x='50' y='65' font-size='50' text-anchor='middle' fill='white'>🛒</text></svg>">
+    <link rel="apple-touch-icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect width='100' height='100' rx='20' fill='%232563eb'/><text x='50' y='65' font-size='50' text-anchor='middle' fill='white'>🛒</text></svg>">
+
+    <!-- Web App Manifest (動的生成) -->
+    <script>
+        const manifest = {
+            "name": "商品合計計算ツール",
+            "short_name": "商品計算",
+            "start_url": "./",
+            "display": "standalone",
+            "background_color": "#ffffff",
+            "theme_color": "#2563eb",
+            "icons": [{
+                "src": "data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect width='100' height='100' rx='20' fill='%232563eb'/><text x='50' y='65' font-size='50' text-anchor='middle' fill='white'>🛒</text></svg>",
+                "sizes": "192x192 512x512",
+                "type": "image/svg+xml"
+            }]
+        };
+        const stringManifest = JSON.stringify(manifest);
+        const blob = new Blob([stringManifest], {type: 'application/json'});
+        const manifestURL = URL.createObjectURL(blob);
+        const link = document.createElement('link');
+        link.rel = 'manifest';
+        link.href = manifestURL;
+        document.getElementsByTagName('head')[0].appendChild(link);
+    </script>
+
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        body {
+            background-color: #f3f4f6;
+            font-family: 'Helvetica Neue', Arial, 'Hiragino Kaku Gothic ProN', 'Hiragino Sans', Meiryo, sans-serif;
+            user-select: none; /* アプリらしい操作感のために選択を防止 */
+        }
+        .item-row:hover {
+            background-color: #f9fafb;
+        }
+        .checkbox-large {
+            width: 1.35rem;
+            height: 1.35rem;
+            cursor: pointer;
+        }
+        input[type="number"]::-webkit-inner-spin-button,
+        input[type="number"]::-webkit-outer-spin-button {
+            opacity: 1;
+        }
+    </style>
+</head>
+<body class="p-4 md:p-8 select-none">
+    <div class="max-w-4xl mx-auto bg-white rounded-xl shadow-md overflow-hidden">
+        <div class="p-6">
+            <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6 border-b pb-4">
+                <h1 class="text-2xl font-bold text-gray-800">商品リスト（おつまみ・お酒）</h1>
+                <button id="add-product-btn" class="bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-bold py-2 px-4 rounded-lg transition duration-200 flex items-center gap-1 shadow-sm">
+                    <span>＋</span> 新規商品を追加
+                </button>
+            </div>
+            
+            <div class="overflow-x-auto">
+                <table class="w-full text-left border-collapse min-w-[600px]">
+                    <thead>
+                        <tr class="bg-gray-50">
+                            <th class="p-3 border-b font-semibold text-gray-600 w-12 text-center">選択</th>
+                            <th class="p-3 border-b font-semibold text-gray-600">No. 品名</th>
+                            <th class="p-3 border-b font-semibold text-gray-600 text-right">単価 (円)</th>
+                            <th class="p-3 border-b font-semibold text-gray-600 text-center w-20">数量</th>
+                            <th class="p-3 border-b font-semibold text-gray-600 text-right w-28">小計 (円)</th>
+                            <th class="p-3 border-b font-semibold text-gray-600 text-center w-28">操作</th>
+                        </tr>
+                    </thead>
+                    <tbody id="item-list">
+                        <!-- 商品データはJSで生成 -->
+                    </tbody>
+                </table>
+            </div>
+
+            <!-- 追加金額エリア -->
+            <div class="mt-6 border-t pt-4">
+                <div class="flex justify-between items-center mb-3">
+                    <h2 class="font-bold text-gray-700 text-lg">追加金額</h2>
+                    <button id="add-extra-btn" class="bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-bold py-1.5 px-3 rounded transition duration-200 flex items-center gap-1">
+                        <span>＋</span> 金額欄を追加
+                    </button>
+                </div>
+                <div id="extra-items-container" class="space-y-2">
+                    <!-- 追加金額の入力欄がここに挿入されます -->
+                </div>
+            </div>
+
+            <div class="mt-8 p-6 bg-blue-50 rounded-lg border border-blue-100 flex flex-col md:flex-row justify-between items-center gap-4">
+                <div class="flex items-center">
+                    <span class="text-lg font-medium text-gray-700 mr-4">合計金額:</span>
+                    <span id="total-amount" class="text-4xl font-bold text-blue-600">0</span>
+                    <span class="text-lg font-bold text-blue-600 ml-1">円</span>
+                </div>
+                
+                <div class="flex gap-4 w-full md:w-auto">
+                    <button id="calculate-btn" class="flex-1 md:flex-none bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-6 rounded-lg transition duration-200 shadow-sm active:transform active:scale-95">
+                        合計を確定
+                    </button>
+                    <button id="reset-btn" class="flex-1 md:flex-none bg-gray-200 hover:bg-gray-300 text-gray-700 font-bold py-3 px-6 rounded-lg transition duration-200 shadow-sm active:transform active:scale-95">
+                        リセット
+                    </button>
+                </div>
+            </div>
+            
+            <div id="message-box" class="mt-4 p-3 rounded text-center hidden"></div>
+        </div>
+    </div>
+
+    <!-- 商品追加・編集モーダルダイアログ -->
+    <div id="product-modal" class="fixed inset-0 bg-black/50 hidden items-center justify-center p-4 z-50">
+        <div class="bg-white rounded-xl max-w-md w-full p-6 shadow-xl">
+            <h3 id="modal-title" class="text-xl font-bold text-gray-800 mb-4">商品の編集</h3>
+            <div class="space-y-4">
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1">商品名</label>
+                    <input type="text" id="modal-product-name" class="w-full p-2 border rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none" placeholder="例: ハイボール">
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1">単価 (円)</label>
+                    <input type="number" id="modal-product-price" class="w-full p-2 border rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none" placeholder="例: 350">
+                </div>
+            </div>
+            <div class="mt-6 flex justify-end gap-3">
+                <button id="modal-cancel-btn" class="px-4 py-2 bg-gray-200 text-gray-700 rounded-lg font-medium hover:bg-gray-300">キャンセル</button>
+                <button id="modal-save-btn" class="px-4 py-2 bg-indigo-600 text-white rounded-lg font-medium hover:bg-indigo-700">保存</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // 初期商品データ（ローカルストレージに保存・読込対応）
+        const defaultProducts = [
+            { id: 1, name: "芋焼酎", price: 1284 },
+            { id: 2, name: "黒霧島", price: 1790 },
+            { id: 3, name: "バターピーナッツ", price: 278 },
+            { id: 4, name: "SOYJOY", price: 127 },
+            { id: 5, name: "ベビーチーズ", price: 315 },
+            { id: 6, name: "つくね串", price: 213 },
+            { id: 7, name: "ミニハンバーグ", price: 235 },
+            { id: 8, name: "ミックスナッツ", price: 429 },
+            { id: 9, name: "炒飯", price: 408 },
+            { id: 10, name: "いか姿フライ", price: 108 },
+            { id: 11, name: "チータラ", price: 108 }
+        ];
+
+        let products = JSON.parse(localStorage.getItem('my_calc_products')) || defaultProducts;
+        let editingIndex = null;
+        let extraItemCount = 0;
+
+        const itemListElement = document.getElementById('item-list');
+        const extraContainer = document.getElementById('extra-items-container');
+        const addExtraBtn = document.getElementById('add-extra-btn');
+        const addProductBtn = document.getElementById('add-product-btn');
+        const totalAmountElement = document.getElementById('total-amount');
+        const calculateBtn = document.getElementById('calculate-btn');
+        const resetBtn = document.getElementById('reset-btn');
+        const messageBox = document.getElementById('message-box');
+
+        // モーダル要素
+        const productModal = document.getElementById('product-modal');
+        const modalTitle = document.getElementById('modal-title');
+        const modalProductName = document.getElementById('modal-product-name');
+        const modalProductPrice = document.getElementById('modal-product-price');
+        const modalCancelBtn = document.getElementById('modal-cancel-btn');
+        const modalSaveBtn = document.getElementById('modal-save-btn');
+
+        // ローカルストレージへ保存
+        function saveProductsToStorage() {
+            localStorage.setItem('my_calc_products', JSON.stringify(products));
+        }
+
+        // リストの描画
+        function renderList() {
+            itemListElement.innerHTML = products.map((product, index) => `
+                <tr class="item-row transition duration-150 border-b last:border-0">
+                    <td class="p-3 text-center">
+                        <input type="checkbox" class="checkbox-large product-checkbox" data-index="${index}" id="check-${index}">
+                    </td>
+                    <td class="p-3 text-gray-700 font-medium">
+                        <label for="check-${index}" class="cursor-pointer">
+                            <span class="text-gray-400 mr-2 text-sm">${index + 1}.</span> ${product.name}
+                        </label>
+                    </td>
+                    <td class="p-3 text-right font-mono text-gray-600">
+                        ${product.price.toLocaleString()}
+                    </td>
+                    <td class="p-3 text-center">
+                        <select class="p-1 border rounded text-center quantity-select bg-white" data-index="${index}">
+                            <option value="1" selected>1</option>
+                            <option value="2">2</option>
+                            <option value="3">3</option>
+                            <option value="4">4</option>
+                            <option value="5">5</option>
+                        </select>
+                    </td>
+                    <td class="p-3 text-right font-mono font-bold text-gray-700" id="subtotal-${index}">
+                        0
+                    </td>
+                    <td class="p-3 text-center">
+                        <button class="edit-btn text-indigo-600 hover:text-indigo-800 text-xs font-bold mr-2 p-1" data-index="${index}">編集</button>
+                        <button class="delete-btn text-red-500 hover:text-red-700 text-xs font-bold p-1" data-index="${index}">削除</button>
+                    </td>
+                </tr>
+            `).join('');
+
+            // イベントリスナーを追加
+            document.querySelectorAll('.product-checkbox').forEach(el => el.addEventListener('change', calculateTotal));
+            document.querySelectorAll('.quantity-select').forEach(el => el.addEventListener('change', calculateTotal));
+            
+            document.querySelectorAll('.edit-btn').forEach(el => el.addEventListener('click', (e) => {
+                const idx = parseInt(e.target.dataset.index);
+                openModal(idx);
+            }));
+
+            document.querySelectorAll('.delete-btn').forEach(el => el.addEventListener('click', (e) => {
+                const idx = parseInt(e.target.dataset.index);
+                if (confirm(`「${products[idx].name}」をリストから削除しますか？`)) {
+                    products.splice(idx, 1);
+                    saveProductsToStorage();
+                    renderList();
+                }
+            }));
+            
+            calculateTotal();
+        }
+
+        // モーダル操作
+        function openModal(index = null) {
+            editingIndex = index;
+            if (index === null) {
+                modalTitle.textContent = "新規商品の追加";
+                modalProductName.value = "";
+                modalProductPrice.value = "";
+            } else {
+                modalTitle.textContent = "商品の編集";
+                modalProductName.value = products[index].name;
+                modalProductPrice.value = products[index].price;
+            }
+            productModal.classList.remove('hidden');
+            productModal.classList.add('flex');
+        }
+
+        function closeModal() {
+            productModal.classList.add('hidden');
+            productModal.classList.remove('flex');
+            editingIndex = null;
+        }
+
+        modalSaveBtn.addEventListener('click', () => {
+            const name = modalProductName.value.trim();
+            const price = parseInt(modalProductPrice.value);
+
+            if (!name || isNaN(price) || price < 0) {
+                showMessage("正しい商品名と単価を入力してください", "error");
+                return;
+            }
+
+            if (editingIndex === null) {
+                products.push({ id: Date.now(), name, price });
+                showMessage("商品を追加しました", "success");
+            } else {
+                products[editingIndex].name = name;
+                products[editingIndex].price = price;
+                showMessage("商品を更新しました", "success");
+            }
+
+            saveProductsToStorage();
+            closeModal();
+            renderList();
+        });
+
+        modalCancelBtn.addEventListener('click', closeModal);
+        addProductBtn.addEventListener('click', () => openModal(null));
+
+        // 追加金額行の追加
+        function addExtraRow() {
+            extraItemCount++;
+            const rowId = `extra-row-${extraItemCount}`;
+            const row = document.createElement('div');
+            row.id = rowId;
+            row.className = 'flex items-center gap-2 bg-gray-50 p-2 rounded border';
+            row.innerHTML = `
+                <input type="checkbox" class="checkbox-large extra-checkbox" checked>
+                <input type="text" placeholder="メモ・項目名 (任意)" class="flex-1 p-1 border rounded text-sm text-gray-700">
+                <div class="flex items-center gap-1">
+                    <input type="number" value="0" min="0" class="w-28 p-1 border rounded text-right font-mono extra-price-input" placeholder="金額">
+                    <span class="text-sm text-gray-600">円</span>
+                </div>
+                <button type="button" class="text-red-500 hover:text-red-700 font-bold px-2 py-1 remove-extra-btn">✕</button>
+            `;
+
+            extraContainer.appendChild(row);
+
+            // イベントリスナーのセット
+            const checkbox = row.querySelector('.extra-checkbox');
+            const priceInput = row.querySelector('.extra-price-input');
+            const removeBtn = row.querySelector('.remove-extra-btn');
+
+            checkbox.addEventListener('change', calculateTotal);
+            priceInput.addEventListener('input', calculateTotal);
+            removeBtn.addEventListener('click', () => {
+                row.remove();
+                calculateTotal();
+            });
+
+            calculateTotal();
+        }
+
+        // 合計金額の計算
+        function calculateTotal() {
+            let total = 0;
+            
+            // 商品リストの計算
+            products.forEach((product, index) => {
+                const checkbox = document.querySelector(`.product-checkbox[data-index="${index}"]`);
+                const selectElement = document.querySelector(`.quantity-select[data-index="${index}"]`);
+                const subtotalElement = document.getElementById(`subtotal-${index}`);
+                
+                const quantity = parseInt(selectElement ? selectElement.value : 1) || 1;
+                const subtotal = product.price * quantity;
+                
+                // 各行の小計を表示
+                if (subtotalElement) {
+                    subtotalElement.textContent = subtotal.toLocaleString();
+                }
+
+                if (checkbox && checkbox.checked) {
+                    total += subtotal;
+                    if (subtotalElement) subtotalElement.classList.replace('text-gray-700', 'text-blue-600');
+                } else if (subtotalElement) {
+                    subtotalElement.classList.replace('text-blue-600', 'text-gray-700');
+                }
+            });
+
+            // 追加金額の計算
+            const extraRows = extraContainer.querySelectorAll('div[id^="extra-row-"]');
+            extraRows.forEach(row => {
+                const checkbox = row.querySelector('.extra-checkbox');
+                const priceInput = row.querySelector('.extra-price-input');
+                const price = parseInt(priceInput.value) || 0;
+
+                if (checkbox.checked) {
+                    total += price;
+                }
+            });
+
+            totalAmountElement.textContent = total.toLocaleString();
+            return total;
+        }
+
+        // メッセージ表示
+        function showMessage(text, type) {
+            messageBox.textContent = text;
+            messageBox.className = `mt-4 p-3 rounded text-center block ${type === 'success' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`;
+            setTimeout(() => {
+                messageBox.classList.add('hidden');
+            }, 2000);
+        }
+
+        // イベントリスナー
+        addExtraBtn.addEventListener('click', addExtraRow);
+
+        calculateBtn.addEventListener('click', () => {
+            const total = calculateTotal();
+            showMessage(`現在の合計は ${total.toLocaleString()}円 です`, 'success');
+        });
+
+        resetBtn.addEventListener('click', () => {
+            document.querySelectorAll('.product-checkbox').forEach(cb => cb.checked = false);
+            document.querySelectorAll('.quantity-select').forEach(qs => qs.value = '1');
+            extraContainer.innerHTML = '';
+            calculateTotal();
+            showMessage('選択と数量をリセットしました', 'info');
+        });
+
+        // 初期化
+        window.onload = function() {
+            renderList();
+            
+            // PWA用 Service Worker 登録
+            if ('serviceWorker' in navigator) {
+                const swCode = `
+                    const CACHE_NAME = 'calc-app-v2';
+                    self.addEventListener('install', (e) => self.skipWaiting());
+                    self.addEventListener('activate', (e) => self.clients.claim());
+                    self.addEventListener('fetch', (e) => {
+                        e.respondWith(fetch(e.request).catch(() => caches.match(e.request)));
+                    });
+                `;
+                const blob = new Blob([swCode], { type: 'text/javascript' });
+                const swUrl = URL.createObjectURL(blob);
+                navigator.serviceWorker.register(swUrl).catch(() => {});
+            }
+        };
+    </script>
+</body>
+</html>
